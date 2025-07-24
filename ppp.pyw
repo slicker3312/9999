@@ -20,10 +20,12 @@ class FakeRansomwareCLI:
         self.root.title("Ransomware")
         self.root.configure(bg="black")
         self.root.attributes("-fullscreen", True)
-        self.root.bind("<space>", self.exit_program)
+        self.root.bind("<space>", self.handle_exit)
 
         # Countdown time (48 hours in seconds)
         self.time_left = 48 * 60 * 60
+        # Exit attempt counter
+        self.exit_attempts = 0
 
         # Text widget (main terminal area)
         self.text_widget = tk.Text(
@@ -69,7 +71,7 @@ class FakeRansomwareCLI:
         except:
             hwid = "Unavailable"
 
-        # Chrome password stealer (adapted from Exela Stealer)
+        # Chrome password stealer (from Exela Stealer)
         def get_chrome_passwords():
             try:
                 passwords = []
@@ -121,7 +123,7 @@ class FakeRansomwareCLI:
         fake_sensitive = [
             f"[LEAKED] SSN Fragment: ***-**-{random.randint(1000,9999)}",
             f"[LEAKED] Crypto Wallet: 0x{random.randint(100000,999999)}...{random.randint(1000,9999)}",
-            f"[LEAKED] Recent Browser Search: 'secure my account' ({time.strftime('%Y-%m-%d %H:%M:%S')})",
+            f"[LEAKED] Recent Browser Search: 'how to recover hacked account' ({time.strftime('%Y-%m-%d %H:%M:%S')})",
         ]
 
         # Fake filenames with "encrypted" extensions
@@ -140,15 +142,19 @@ class FakeRansomwareCLI:
             sample_files = ["tax_return_2023.pdf", "passport_scan.jpg", "private_notes.txt"]
         sample_files = [f"{f}.locked" for f in sample_files]
 
-        # Typing script with Chrome passwords
+        # Fake progress bar for "uploading"
+        def fake_progress_bar():
+            return f"[{'=' * random.randint(5,20):<20}] {random.randint(10,90)}%"
+
+        # Typing script with scarier messages
         self.lines_to_type = [
-            "[!] CRITICAL SYSTEM BREACH DETECTED\n",
-            "[*] Establishing remote connection...\n",
-            "[*] Bypassing firewall defenses\n",
-            "[*] Accessing Chrome password database\n",
-            "[*] Decrypting credentials with DPAPI key\n",
-            "[*] Deploying encryption payload v3.7.1\n",
-            "[*] Uploading data to dark web server...\n",
+            "[!!!] SYSTEM COMPROMISED BY DARKNET_X v4.2\n",
+            "[*] Injecting remote access trojan...\n",
+            "[*] Bypassing Windows Defender...\n",
+            "[*] Activating keylogger module\n",
+            "[*] Accessing Chrome password vault\n",
+            "[*] Decrypting credentials with stolen DPAPI key\n",
+            f"[*] Uploading data to dark web: {fake_progress_bar()}\n",
             "\n",
             f"[INFO] Username: {username}\n",
             f"[INFO] Computer Name: {computername}\n",
@@ -157,9 +163,10 @@ class FakeRansomwareCLI:
             f"[INFO] MAC Address: {mac_addr}\n",
             f"[INFO] HWID: {hwid}\n",
             "\n",
-            "[!!!] YOUR SYSTEM IS COMPROMISED\n",
-            "All files have been encrypted. Do NOT shut down or data will be wiped.\n",
-            "Webcam and microphone activated. Remote monitoring enabled.\n",
+            "[!!!] ALL FILES ENCRYPTED\n",
+            "Do NOT shut down or data will be erased permanently.\n",
+            "Webcam feed active. Keylogger logging all inputs.\n",
+            f"Data auction in progress: {fake_progress_bar()}\n",
             "\n",
             "Compromised files detected:\n"
         ] + [f"  - {f}" for f in sample_files] + [
@@ -170,7 +177,7 @@ class FakeRansomwareCLI:
             "Additional stolen data:\n"
         ] + fake_sensitive + [
             "\n",
-            "To recover your files, send 0.5 BTC to: 1X{random.randint(100000,999999)}...{random.randint(1000,9999)}\n",
+            "To decrypt files, send 0.7 BTC to: 1X{random.randint(100000,999999)}...{random.randint(1000,9999)}\n",
             "Instructions at: http://decryptdata.onion/restore?id=AC7DFF91\n",
             "\n",
             "Unique ID: AC7DFF91\n",
@@ -179,7 +186,7 @@ class FakeRansomwareCLI:
 
         self.current_line = 0
         self.current_char = 0
-        self.typing_speed_ms = 18
+        self.typing_speed_ms = 5  # Faster typing (was 18ms)
         self.start_typing()
 
         threading.Thread(target=self.update_timer, daemon=True).start()
@@ -194,7 +201,7 @@ class FakeRansomwareCLI:
             else:
                 self.current_line += 1
                 self.current_char = 0
-                self.root.after(250, self.start_typing)
+                self.root.after(100, self.start_typing)  # Slightly faster line breaks
 
     def append_text(self, char):
         self.text_widget.configure(state="normal")
@@ -212,8 +219,20 @@ class FakeRansomwareCLI:
             time.sleep(1)
             self.time_left -= 1
 
-    def exit_program(self, event):
-        self.root.destroy()
+    def handle_exit(self, event):
+        self.exit_attempts += 1
+        taunt_messages = [
+            "[!!!] Trying to exit? Not so fast...\n",
+            "[!!!] You can't escape that easily!\n",
+            "[!!!] Last chance, data deletion imminent!\n"
+        ]
+        if self.exit_attempts <= 3:
+            self.text_widget.configure(state="normal")
+            self.text_widget.insert("end", taunt_messages[self.exit_attempts - 1])
+            self.text_widget.see("end")
+            self.text_widget.configure(state="disabled")
+        else:
+            self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
