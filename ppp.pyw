@@ -1,10 +1,9 @@
 import tkinter as tk
-import time
 
 class FakeRansomwareCLI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Ransomware Alert")
+        self.root.title("Ransomware")
         self.root.configure(bg="black")
         self.root.attributes("-fullscreen", True)
         self.root.bind("<space>", self.exit_program)
@@ -12,9 +11,9 @@ class FakeRansomwareCLI:
         self.text_widget = tk.Text(
             root,
             bg="black",
-            fg="lime",
-            insertbackground="lime",
-            font=("Consolas", 20),
+            fg="red",
+            insertbackground="red",
+            font=("Consolas", 16),  # Smaller font size
             bd=0,
             highlightthickness=0,
             padx=20,
@@ -24,19 +23,29 @@ class FakeRansomwareCLI:
         self.text_widget.configure(state="disabled")
 
         self.lines_to_type = [
-            "Initializing encryption process...\n",
-            "Scanning files in user directories...\n",
-            "Encrypting files with AES-256...\n",
-            "Backing up encryption keys to remote server...\n",
+            "[!] SYSTEM COMPROMISED...\n",
+            "[*] Establishing secure session with control node\n",
+            "[*] Indexing critical files...\n",
+            "[*] Locking data assets\n",
             "\n",
-            "YOUR FILES HAVE BEEN ENCRYPTED!\n",
-            "To recover your files, you must pay 5 BTC to the following address:\n",
-            "1FfmbHfnpaZjKFvyi1okTjJJusN455paPH\n",
+            "[!!!] ALL YOUR IMPORTANT FILES HAVE BEEN LOCKED\n",
+            "[!!!] DO NOT TURN OFF YOUR COMPUTER\n",
             "\n",
-            "Send the payment within 48 hours, or your files will be permanently deleted.\n",
-            "After payment, contact us at decrypt_support@onionmail.org with your wallet address.\n",
+            "Your documents, photos, databases, and other sensitive files are no longer accessible.\n",
+            "You are being watched. Any attempt to tamper with the system will result in permanent loss.\n",
             "\n",
-            "Press SPACEBAR to exit (Not recommended, your files will remain encrypted)\n"
+            "This is not a bluff.\n",
+            "\n",
+            "To recover your files, you must comply with the instructions provided below.\n",
+            "Open the link on a TOR browser:\n",
+            "http://darkgatedecrypt.onion/restore?id=AC7DFF91\n",
+            "\n",
+            "Your system ID: AC7DFF91\n",
+            "Time remaining: 47:59:33\n",
+            "\n",
+            "Failure to act will result in irreversible data loss.\n",
+            "\n",
+            "Press SPACEBAR to exit (not recommended)\n"
         ]
 
         self.current_line = 0
@@ -54,10 +63,8 @@ class FakeRansomwareCLI:
             else:
                 self.current_line += 1
                 self.current_char = 0
-                # Slight delay between lines for realism
                 self.root.after(400, self.start_typing)
         else:
-            # Finished typing all lines
             pass
 
     def append_text(self, char):
